@@ -78,6 +78,13 @@ class MultiTaskNet(nn.Module):
         #********************************************************
         #******************* YOUR CODE HERE *********************
         #********************************************************
+        self.user_embeddings = ScaledEmbedding(num_embeddings=num_users, embedding_dim=embedding_dim, sparse=sparse)
+        self.item_embeddings = ScaledEmbedding(num_embeddings=num_items, embedding_dim=embedding_dim, sparse=sparse)
+        self.user_bias = ZeroEmbedding(num_embeddings=num_users, embedding_dim=1, sparse=sparse)
+        self.item_bias = ZeroEmbedding(num_embeddings=num_items, embedding_dim=1, sparse=sparse)
+        self.mlp = nn.Sequential(nn.Linear(layer_sizes[0], layer_sizes[1]),
+                                 nn.ReLU(),
+                                 nn.Linear(layer_sizes[1], 1))
 
         #********************************************************
         #********************************************************
@@ -106,7 +113,14 @@ class MultiTaskNet(nn.Module):
         #********************************************************
         #******************* YOUR CODE HERE *********************
         #********************************************************
-        
+        user_embeddings = self.user_embeddings(user_ids)
+        user_biases = self.user_bias(user_ids)
+        item_embeddings = self.item_embeddings(user_ids)
+        item_biases = self.item_bias(user_ids)
+        predictions = torch.sum(user_embeddings * item_embeddings, 1).unsqueeze(1) + user_biases + item_biases
+        predictions = predictions.squeeze(1)
+        score = self.mlp(torch.cat((user_embeddings, item_embeddings, user_embeddings * item_embeddings), 1))
+        score = score.squeeze(1)
         #********************************************************
         #********************************************************
         #********************************************************
