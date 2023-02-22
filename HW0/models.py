@@ -74,12 +74,20 @@ class MultiTaskNet(nn.Module):
         super().__init__()
 
         self.embedding_dim = embedding_dim
+        self.embedding_sharing = embedding_sharing
 
         #********************************************************
         #******************* YOUR CODE HERE *********************
         #********************************************************
-        self.user_embeddings = ScaledEmbedding(num_embeddings=num_users, embedding_dim=embedding_dim, sparse=sparse)
-        self.item_embeddings = ScaledEmbedding(num_embeddings=num_items, embedding_dim=embedding_dim, sparse=sparse)
+        if embedding_sharing:
+            self.user_embeddings_shared = ScaledEmbedding(num_embeddings=num_users, embedding_dim=embedding_dim, sparse=sparse)
+            self.item_embeddings_shared = ScaledEmbedding(num_embeddings=num_items, embedding_dim=embedding_dim, sparse=sparse)
+        else:
+            self.user_embeddings_fact = ScaledEmbedding(num_embeddings=num_users, embedding_dim=embedding_dim, sparse=sparse)
+            self.item_embeddings_fact = ScaledEmbedding(num_embeddings=num_items, embedding_dim=embedding_dim, sparse=sparse)
+            self.user_embeddings_reg = ScaledEmbedding(num_embeddings=num_users, embedding_dim=embedding_dim, sparse=sparse)
+            self.item_embeddings_reg = ScaledEmbedding(num_embeddings=num_items, embedding_dim=embedding_dim, sparse=sparse)
+        
         self.user_bias = ZeroEmbedding(num_embeddings=num_users, embedding_dim=1, sparse=sparse)
         self.item_bias = ZeroEmbedding(num_embeddings=num_items, embedding_dim=1, sparse=sparse)
         self.mlp = nn.Sequential(nn.Linear(layer_sizes[0], layer_sizes[1]),
@@ -113,13 +121,22 @@ class MultiTaskNet(nn.Module):
         #********************************************************
         #******************* YOUR CODE HERE *********************
         #********************************************************
-        user_embeddings = self.user_embeddings(user_ids)
         user_biases = self.user_bias(user_ids)
-        item_embeddings = self.item_embeddings(user_ids)
         item_biases = self.item_bias(user_ids)
-        predictions = torch.sum(user_embeddings * item_embeddings, 1).unsqueeze(1) + user_biases + item_biases
+        if self.embedding_sharing:
+            user_embeddings_fact = self.user_embeddings_shared(user_ids)
+            item_embeddings_fact = self.item_embeddings_shared(user_ids)
+            user_embeddings_reg = user_embeddings_fact
+            item_embeddings_reg = item_embeddings_fact
+        else:
+            user_embeddings_fact = self.user_embeddings_fact(user_ids)
+            item_embeddings_fact = self.item_embeddings_fact(user_ids)
+            user_embeddings_reg = self.user_embeddings_reg(user_ids)
+            item_embeddings_reg = self.item_embeddings_reg(user_ids)
+
+        predictions = torch.sum(user_embeddings_fact * item_embeddings_fact, 1).unsqueeze(1) + user_biases + item_biases
         predictions = predictions.squeeze(1)
-        score = self.mlp(torch.cat((user_embeddings, item_embeddings, user_embeddings * item_embeddings), 1))
+        score = self.mlp(torch.cat((user_embeddings_reg, item_embeddings_reg, user_embeddings_reg * item_embeddings_reg), 1))
         score = score.squeeze(1)
         #********************************************************
         #********************************************************
